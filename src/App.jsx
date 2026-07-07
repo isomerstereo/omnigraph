@@ -707,6 +707,7 @@ export default function App() {
               zIndex: 1 
             }} />
             
+            {/* Render Nodes Chronologically */}
             {filteredNodes.map(node => {
               const xPos = getRelativeX(node);
               if (xPos === -9999) return null;
@@ -762,12 +763,18 @@ export default function App() {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div className="node-glow-circle" style={{
-                        width: '42px', height: '42px', borderRadius: '50%', background: '#000',
+                        width: '42px', 
+                        height: '42px', 
+                        borderRadius: '50%', 
+                        background: '#000',
                         border: `1px solid ${(isSelected || isFocused) ? '#fff' : '#ffd700'}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px',
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        fontSize: '20px',
                         boxShadow: (isSelected || isFocused) ? '0 0 20px rgba(255, 215, 0, 0.4)' : 'none'
                       }}>
-                        {node.icon}
+                        {node.icon || '⭐'}
                       </div>
                       <div style={{ 
                         color: (isSelected || isFocused) ? '#fff' : '#ffd700', 
@@ -785,9 +792,14 @@ export default function App() {
                 </div>
               );
             })}
+
           </div>
         </div>
       )}
+
+    </div>
+  );
+} // True final closing brace for the App component
 
       {/* 13. THE DOUBTS ARCHIVE VIEW */}
       {view === 'doubts' && (
