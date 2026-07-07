@@ -60,37 +60,6 @@ export default function App() {
   
   const scrollRef = useRef(null); 
 
-  // 5. AUTHENTICATION LOGIC (RULE 3)
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error("Authentication Error:", err);
-      } finally {
-        setAuthLoading(false);
-      }
-    };
-
-    initAuth();
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      // Check if user has a custom token (indicating admin/patreon status)
-      if (currentUser && !currentUser.isAnonymous) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
  // 5. POCKETBASE AUTHENTICATION LOGIC (RULE 3)
   useEffect(() => {
     const initAuth = async () => {
