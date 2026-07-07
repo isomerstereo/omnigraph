@@ -216,7 +216,7 @@ export default function App() {
   )).sort();
 
   const handleCreateNode = async () => {
-    if (!user) return; // Rule 3: Auth Guard
+    if (!user) return; // Auth Guard
 
     const numericYear = parseFloat(formData.time) || 0; 
     const actualYear = formData.era === 'BC' ? -Math.abs(numericYear) : Math.abs(numericYear);
@@ -233,27 +233,31 @@ export default function App() {
       .map(t => t.startsWith('#') ? t : `#${t}`)
       .join(' ');
 
-    // Prepare data for Cloud Storage
+    // Prepare data formatted correctly for the PocketBase fields
     const nodeData = { 
-      ...formData,
-      title: formData.title.trim(), 
-      actualYear,
+      title: formData.title.trim(),
+      nodeType: formData.nodeType,
+      time: formData.time,
       endTime: formData.nodeType === 'era' ? formData.endTime : '',
+      era: formData.era,
+      actualYear,
       actualEndYear, 
       tags: formattedTags,
-      userId: user.uid, // Track creator
-      updatedAt: Date.now()
+      icon: formData.icon,
+      content: formData.content,
+      citation: formData.citation,
+      videoLink: formData.videoLink,
+      image: formData.image,
+      userId: user.id // Refactored: PocketBase uses .id instead of .uid
     };
 
     try {
-      // Rule 1: Strict Pathing
-      const nodesCol = collection(db, 'artifacts', appId, 'public', 'data', 'nodes');
-      
       if (isEditing && formData.id) {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'nodes', formData.id);
-        await updateDoc(docRef, nodeData);
+        // Refactored: PocketBase single-record collection update syntax
+        await pb.collection('nodes').update(formData.id, nodeData);
       } else {
-        await addDoc(nodesCol, { ...nodeData, createdAt: Date.now() });
+        // Refactored: PocketBase record creation syntax
+        await pb.collection('nodes').create(nodeData);
       }
 
       // Reset Form UI
@@ -264,7 +268,7 @@ export default function App() {
         title: '', content: '', icon: '⭐', citation: '', videoLink: '', image: '' 
       });
     } catch (err) {
-      console.error("Cloud Save Error:", err);
+      console.error("PocketBase Save Error:", err);
     }
   };
 
@@ -273,11 +277,11 @@ export default function App() {
 
     if (window.confirm("Permanent Delete from Cloud?")) {
       try {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'nodes', id);
-        await deleteDoc(docRef);
+        // Refactored: PocketBase collection delete by primary key ID
+        await pb.collection('nodes').delete(id);
         setSelectedNode(null); 
       } catch (err) {
-        console.error("Cloud Delete Error:", err);
+        console.error("PocketBase Delete Error:", err);
       }
     }
   };
@@ -287,17 +291,19 @@ export default function App() {
     if (!user || !doubtForm.title.trim()) return;
 
     const newDoubt = {
-      ...doubtForm,
-      authorId: user.uid,
-      authorName: user.displayName || `Explorer_${user.uid.substring(0, 5)}`,
+      title: doubtForm.title.trim(),
+      content: doubtForm.content,
+      suggestedTime: doubtForm.suggestedTime,
+      suggestedEra: doubtForm.suggestedEra,
+      authorId: user.id, // Refactored: PocketBase uses .id instead of .uid
+      authorName: user.name || user.username || `Explorer_${user.id.substring(0, 5)}`,
       votes: { yes: [], no: [] }, 
-      createdAt: Date.now(),
       status: 'pending'
     };
 
     try {
-      const doubtsCol = collection(db, 'artifacts', appId, 'public', 'data', 'doubts');
-      await addDoc(doubtsCol, newDoubt);
+      // Refactored: Target the pocketbase doubts collection directly
+      await pb.collection('doubts').create(newDoubt);
       setDoubtForm({ title: '', content: '', suggestedTime: '', suggestedEra: 'AD' });
     } catch (err) {
       console.error("Doubt Creation Error:", err);
@@ -306,20 +312,23 @@ export default function App() {
 
   const handleVote = async (doubtId, voteType) => {
     if (!user) return;
-    const doubtRef = doc(db, 'artifacts', appId, 'public', 'data', 'doubts', doubtId);
     const doubt = doubts.find(d => d.id === doubtId);
     if (!doubt) return;
 
-    let newYes = [...(doubt.votes?.yes || [])].filter(uid => uid !== user.uid);
-    let newNo = [...(doubt.votes?.no || [])].filter(uid => uid !== user.uid);
+    // Refactored: Adjust arrays targeting user.id to scrub previous matching votes
+    let newYes = [...(doubt.votes?.yes || [])].filter(id => id !== user.id);
+    let newNo = [...(doubt.votes?.no || [])].filter(id => id !== user.id);
 
-    if (voteType === 'yes') newYes.push(user.uid);
-    if (voteType === 'no') newNo.push(user.uid);
+    if (voteType === 'yes') newYes.push(user.id);
+    if (voteType === 'no') newNo.push(user.id);
 
     try {
-      await updateDoc(doubtRef, { 
-        'votes.yes': newYes, 
-        'votes.no': newNo 
+      // Refactored: Pass a restructured JSON object field update to PocketBase
+      await pb.collection('doubts').update(doubtId, { 
+        votes: {
+          yes: newYes,
+          no: newNo
+        }
       });
     } catch (err) {
       console.error("Vote Error:", err);
@@ -375,7 +384,6 @@ export default function App() {
       return part;
     });
   };
-
   // 9. CAUSAL LINE CALCULATIONS
   const causalLines = [];
   filteredNodes.forEach(sourceNode => {
