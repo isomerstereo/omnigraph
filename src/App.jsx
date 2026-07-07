@@ -409,84 +409,8 @@ export default function App() {
     );
   }
 
-// 2. MAIN ROUTING
-  // We use ONE return statement, and choose what's inside based on the 'view' state.
-  return (
-    <div style={{ backgroundColor: '#050505', minHeight: '100vh', color: 'white' }}>
-      
-      {/* HOMEPAGE VIEW */}
-      {view === 'home' && (
-        <div style={homeStyles.container}>
-          <div style={{
-            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-            width: '600px', height: '600px', pointerEvents: 'none',
-            background: 'radial-gradient(circle, rgba(255, 215, 0, 0.05) 0%, transparent 70%)',
-          }}></div>
-          
-          <main style={homeStyles.main}>
-            <section style={{ marginBottom: '80px' }}>
-              <h1 style={homeStyles.title}>
-                OMNIGRAPH<br/>
-                <span style={{ color: '#ffd700', letterSpacing: '20px', fontWeight: '300', fontSize: '0.8em', display: 'block', marginTop: '10px' }}>CHRONOS</span>
-              </h1>
-              <p style={homeStyles.subtitle}>
-                A non-linear relational map of human and cosmic history. <br/>
-                Connect the dots across the dimension of time.
-              </p>
-              
-              <div style={{ ...homeStyles.buttonGroup, flexWrap: 'wrap', justifyContent: 'center', gap: '15px' }}>
-                <button onClick={() => setView('graph')} style={homeStyles.primaryBtn}>ENTER THE MAP</button>
-                <button onClick={() => setView('doubts')} style={homeStyles.secondaryBtn}>DOUBTS ARCHIVE</button>
-                <a href="https://patreon.com" target="_blank" rel="noreferrer" style={{ ...homeStyles.secondaryBtn, textDecoration: 'none' }}>SUPPORT PROJECT</a>
-              </div>
-            </section>
-
-            <div style={homeStyles.grid}>
-              <div style={homeStyles.card}>
-                <h3 style={{ fontSize: '11px', color: '#ffd700' }}>RELATIONAL GRAPH</h3>
-                <p style={{ fontSize: '11px', color: '#666' }}>Link events using [[node]] syntax to visualize causal chains.</p>
-              </div>
-              <div style={homeStyles.card}>
-                <h3 style={{ fontSize: '11px', color: '#ffd700' }}>DEEP TIME</h3>
-                <p style={{ fontSize: '11px', color: '#666' }}>Zoned mapping from modern history to the Big Bang.</p>
-              </div>
-              <div onClick={() => setView('doubts')} style={{ ...homeStyles.card, cursor: 'pointer' }}>
-                <h3 style={{ fontSize: '11px', color: '#ffd700' }}>CONTRIBUTE</h3>
-                <p style={{ fontSize: '11px', color: '#666' }}>Propose missing nodes and vote on accuracy.</p>
-              </div>
-            </div>
-          </main>
-
-          <footer style={homeStyles.footer}>
-            <button style={homeStyles.loginBtn} onClick={() => setView('user')}>
-               {user ? `PROFILE: ${user.uid.substring(0,8)}` : 'GUEST ACCESS'}
-            </button>
-            <span style={{ opacity: 0.4, fontSize: '9px' }}>v1.0.8 — MAPPING THE INFINITE</span>
-          </footer>
-        </div>
-      )}
-
-      {/* GRAPH VIEW */}
-      {view === 'graph' && (
-        <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
-          {/* Your Graph Component/Logic goes here */}
-          <button onClick={() => setView('home')} style={{ position: 'absolute', top: 20, left: 20, zIndex: 100, background: 'none', color: '#ffd700', border: '1px solid #ffd700', cursor: 'pointer', padding: '5px 10px' }}>
-            ← BACK
-          </button>
-        </div>
-      )}
-
-      {/* DOUBTS VIEW */}
-      {view === 'doubts' && (
-         <div style={{ padding: '100px 20px' }}>
-            {/* Your Doubts Archive Logic goes here */}
-            <button onClick={() => setView('home')} style={{ color: '#ffd700' }}>← BACK HOME</button>
-         </div>
-      )}
-
-    </div>
-  );
-} // Ends the original App component body cleanly before styles definition
+  // 2. HOMEPAGE VIEW (Early Return)
+  if (view === 'home') {
     return (
       <div style={homeStyles.container}>
         <div style={homeStyles.glow}></div>
@@ -495,74 +419,47 @@ export default function App() {
           <section style={{ marginBottom: '80px' }}>
             <h1 style={homeStyles.title}>
               OMNIGRAPH<br/>
-              <span style={{ 
-                color: '#ffd700', 
-                letterSpacing: '20px', 
-                fontWeight: '300', 
-                fontSize: '0.8em',
-                display: 'block',
-                marginTop: '10px' 
-              }}>CHRONOS</span>
+              <span style={{ color: '#ffd700', letterSpacing: '20px', fontWeight: '300', fontSize: '0.8em', display: 'block', marginTop: '10px' }}>CHRONOS</span>
             </h1>
             <p style={homeStyles.subtitle}>
               A non-linear relational map of human and cosmic history. <br/>
               Connect the dots across the dimension of time.
             </p>
+            
             <div style={{ ...homeStyles.buttonGroup, flexWrap: 'wrap', justifyContent: 'center', gap: '15px' }}>
-              <button 
-                onClick={() => setView('graph')} 
-                style={homeStyles.primaryBtn}
-              >
-                ENTER THE MAP
-              </button>
-              
-              <button 
-                onClick={() => setView('doubts')} 
-                style={{ ...homeStyles.secondaryBtn, color: '#ffd700', border: '1px solid #ffd700' }}
-              >
-                DOUBTS ARCHIVE
-              </button>
-
-              <a 
-                href="https://patreon.com" 
-                target="_blank" 
-                rel="noreferrer" 
-                style={homeStyles.secondaryBtn}
-              >
-                SUPPORT PROJECT
-              </a>
+              <button onClick={() => setView('graph')} style={homeStyles.primaryBtn}>ENTER THE MAP</button>
+              <button onClick={() => setView('doubts')} style={homeStyles.secondaryBtn}>DOUBTS ARCHIVE</button>
+              <a href="https://patreon.com" target="_blank" rel="noreferrer" style={{ ...homeStyles.secondaryBtn, textDecoration: 'none' }}>SUPPORT PROJECT</a>
             </div>
           </section>
 
           <div style={homeStyles.grid}>
             <div style={homeStyles.card}>
-              <h3 style={{ fontSize: '11px', letterSpacing: '3px', color: '#ffd700', margin: '0 0 10px 0' }}>RELATIONAL GRAPH</h3>
-              <p style={{ fontSize: '11px', color: '#666', lineHeight: '1.7', margin: 0 }}>Link events using [[node]] syntax to visualize complex causal chains.</p>
+              <h3 style={{ fontSize: '11px', color: '#ffd700' }}>RELATIONAL GRAPH</h3>
+              <p style={{ fontSize: '11px', color: '#666' }}>Link events using [[node]] syntax to visualize causal chains.</p>
             </div>
             <div style={homeStyles.card}>
-              <h3 style={{ fontSize: '11px', letterSpacing: '3px', color: '#ffd700', margin: '0 0 10px 0' }}>DEEP TIME</h3>
-              <p style={{ fontSize: '11px', color: '#666', lineHeight: '1.7', margin: 0 }}>Zoned mapping for everything from modern history to the Big Bang.</p>
+              <h3 style={{ fontSize: '11px', color: '#ffd700' }}>DEEP TIME</h3>
+              <p style={{ fontSize: '11px', color: '#666' }}>Zoned mapping from modern history to the Big Bang.</p>
             </div>
-            <div 
-              onClick={() => setView('doubts')} 
-              style={{ ...homeStyles.card, cursor: 'pointer', border: '1px solid #222' }}
-            >
-              <h3 style={{ fontSize: '11px', letterSpacing: '3px', color: '#ffd700', margin: '0 0 10px 0' }}>CONTRIBUTE</h3>
-              <p style={{ fontSize: '11px', color: '#666', lineHeight: '1.7', margin: 0 }}>Propose missing nodes in the Doubts Archive and vote on accuracy.</p>
+            <div onClick={() => setView('doubts')} style={{ ...homeStyles.card, cursor: 'pointer' }}>
+              <h3 style={{ fontSize: '11px', color: '#ffd700' }}>CONTRIBUTE</h3>
+              <p style={{ fontSize: '11px', color: '#666' }}>Propose missing nodes and vote on accuracy.</p>
             </div>
           </div>
         </main>
 
         <footer style={homeStyles.footer}>
           <button style={homeStyles.loginBtn} onClick={() => setView('user')}>
-             {user ? `PROFILE: ${user.uid.substring(0,8)}` : 'USER ACCESS'}
+             {user ? `PROFILE: ${(user.id || user.uid || '').substring(0, 8)}` : 'GUEST ACCESS'}
           </button>
-          <span style={{ letterSpacing: '3px', opacity: 0.5 }}>v1.0.8 — COMMUNITY EDITION</span>
+          <span style={{ opacity: 0.4, fontSize: '9px' }}>v1.0.8 — MAPPING THE INFINITE</span>
         </footer>
       </div>
     );
+  }
 
-  // --- MAIN APP RETURN (For Graph, Doubts, and User views) ---
+  // 3. MAIN APP RETURN (Graph, Doubts, and User views)
   return (
     <div style={{ 
       backgroundColor: '#050505', 
@@ -632,7 +529,6 @@ export default function App() {
             </button>
           ))}
         </div>
-        </div>
 
         {/* SEARCH & TAG SUGGESTIONS */}
         <div style={{ position: 'relative' }}>
@@ -667,132 +563,6 @@ export default function App() {
         </div>
       </div>
 
-        )
-      {/* 12. THE TIMELINE VIEW (Graph) */}
-      {view === 'graph' && (
-        <div 
-          ref={scrollRef}
-          style={{ flex: 1, position: 'relative', overflowX: 'auto', overflowY: 'hidden', cursor: 'grab', background: 'radial-gradient(circle at 50% 50%, #111 0%, #050505 100%)' }}
-        >
-          <div style={{ width: '10000px', height: '100%', position: 'relative' }}>
-            
-            {/* Causal Lines (SVG Layer) */}
-            <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}>
-              {causalLines.map(line => (
-                <line
-                  key={line.id}
-                  x1={line.x1}
-                  y1={line.y1}
-                  x2={line.x2}
-                  y2={line.y2}
-                  stroke={line.isActive ? "#ffd700" : "#222"}
-                  strokeWidth={line.isActive ? 2 : 1}
-                  strokeDasharray={line.isActive ? "0" : "5,5"}
-                  style={{ transition: 'all 0.3s' }}
-                />
-              ))}
-            </svg>
-
-            {/* The Chronological Spine */}
-            <div style={{ 
-              position: 'absolute', 
-              top: '1000px', 
-              left: 0, 
-              width: '100%', 
-              height: '1px', 
-              background: 'linear-gradient(90deg, transparent, #333, #ffd700, #333, transparent)', 
-              zIndex: 1 
-            }} />
-            
-            {/* Render Nodes Chronologically */}
-            {filteredNodes.map(node => {
-              const xPos = getRelativeX(node);
-              if (xPos === -9999) return null;
-              
-              const vOffset = getVerticalOffset(node, filteredNodes);
-              const isSelected = selectedNode?.id === node.id;
-              const isFocused = focusedNode?.id === node.id;
-              
-              const isEra = node.nodeType === 'era' || (node.endTime && node.endTime !== '' && parseFloat(node.endTime) !== parseFloat(node.time));
-              let eraWidth = 0;
-              if (isEra) {
-                const xEnd = getRelativeX({ ...node, time: node.endTime || node.time });
-                eraWidth = Math.max(Math.abs(xEnd - xPos), 10);
-              }
-
-              return (
-                <div 
-                  key={node.id} 
-                  onClick={(e) => { e.stopPropagation(); setFocusedNode(node); setSelectedNode(null); }}
-                  style={{ 
-                    position: 'absolute', 
-                    left: `${xPos}px`, 
-                    top: isEra ? '970px' : `calc(1000px + ${vOffset}px)`, 
-                    transform: isEra ? `none` : `translate(-50%, -50%) scale(${(isSelected || isFocused) ? 1.1 : 1})`, 
-                    cursor: 'pointer', 
-                    zIndex: isSelected ? 4100 : (isFocused ? 101 : (isEra ? 50 : 100)),
-                    transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                  }}
-                >
-                  {isEra ? (
-                    <div style={{ 
-                      width: `${eraWidth}px`, 
-                      height: '8px', 
-                      background: (isSelected || isFocused) ? '#ffd700' : 'rgba(255, 215, 0, 0.15)', 
-                      border: `1px solid ${(isSelected || isFocused) ? '#fff' : 'rgba(255, 215, 0, 0.4)'}`, 
-                      borderRadius: '4px', 
-                      position: 'relative' 
-                    }}>
-                      <div style={{ 
-                        position: 'absolute', 
-                        top: '-25px', 
-                        left: '50%', 
-                        transform: 'translateX(-50%)',
-                        color: '#ffd700', 
-                        fontSize: '10px', 
-                        fontWeight: 'bold', 
-                        whiteSpace: 'nowrap',
-                        letterSpacing: '1px'
-                      }}>
-                        {node.title.toUpperCase()}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <div className="node-glow-circle" style={{
-                        width: '42px', 
-                        height: '42px', 
-                        borderRadius: '50%', 
-                        background: '#000',
-                        border: `1px solid ${(isSelected || isFocused) ? '#fff' : '#ffd700'}`,
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        fontSize: '20px',
-                        boxShadow: (isSelected || isFocused) ? '0 0 20px rgba(255, 215, 0, 0.4)' : 'none'
-                      }}>
-                        {node.icon || '⭐'}
-                      </div>
-                      <div style={{ 
-                        color: (isSelected || isFocused) ? '#fff' : '#ffd700', 
-                        marginTop: '10px', 
-                        fontSize: '10px', 
-                        fontWeight: '600', 
-                        textAlign: 'center', 
-                        whiteSpace: 'nowrap',
-                        textShadow: '0 2px 4px rgba(0,0,0,0.8)'
-                      }}>
-                        {node.title}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-          </div>
-        </div>
-      )}
       {/* 13. THE DOUBTS ARCHIVE VIEW */}
       {view === 'doubts' && (
         <div style={{ 
@@ -1031,8 +801,6 @@ export default function App() {
           }}>
             {ZONES[currentZone].label.toUpperCase()}
           </div>
-          </div>
-          </div>
 
     {/* 1. Present Day Marker (Context-Aware) */}
     {(currentZone === 'Years' || currentZone === 'Decades') && (
@@ -1185,8 +953,13 @@ export default function App() {
               </div>
             </div>
           )}
-        </div>)
-{/* 4. INFO PANEL (Slides in from the right) */}
+        </div>
+      );
+    })}
+          </div>
+        </div>
+
+      {/* 4. INFO PANEL (Slides in from the right) */}
       {selectedNode && (
         <div 
           onClick={(e) => e.stopPropagation()} 
@@ -1565,8 +1338,10 @@ export default function App() {
           transition: d 0.4s ease, stroke-dashoffset 0.5s ease, opacity 0.4s ease, stroke 0.4s ease;
         }
       `}</style>
-      }
-    )};
+    </div>
+  );
+}
+
 // --- STYLING CONSTANTS ---
 const homeStyles = {
   container: { backgroundColor: '#050505', color: 'white', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'serif', overflow: 'hidden', position: 'relative' },
