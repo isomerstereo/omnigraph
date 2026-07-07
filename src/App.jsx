@@ -409,7 +409,7 @@ export default function App() {
     );
   }
 
-  // 2. MAIN ROUTING
+// 2. MAIN ROUTING
   // We use ONE return statement, and choose what's inside based on the 'view' state.
   return (
     <div style={{ backgroundColor: '#050505', minHeight: '100vh', color: 'white' }}>
@@ -486,9 +486,7 @@ export default function App() {
 
     </div>
   );
-} // This is the final closing brace for the App() function 
-  // 10. HOMEPAGE VIEW (Early Return)
-  if (view === 'home') {
+} // Ends the original App component body cleanly before styles definition
     return (
       <div style={homeStyles.container}>
         <div style={homeStyles.glow}></div>
@@ -563,7 +561,6 @@ export default function App() {
         </footer>
       </div>
     );
-  }
 
   // --- MAIN APP RETURN (For Graph, Doubts, and User views) ---
   return (
@@ -796,11 +793,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-    </div>
-  );
-} // True final closing brace for the App component
-
       {/* 13. THE DOUBTS ARCHIVE VIEW */}
       {view === 'doubts' && (
         <div style={{ 
