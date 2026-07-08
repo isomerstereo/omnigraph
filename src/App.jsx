@@ -64,16 +64,22 @@ export default function App() {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // If there's an environment auth token passed in, validate or sign in with it
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await pb.collection('users').authWithPassword('admin_email', 'admin_password'); // Or use token auth if applicable
-        } else if (!pb.authStore.isValid) {
-          // PocketBase handles guests transparently, but if you need an explicit guest/auth session:
-          // For now, if there's no valid local storage session, we treat them as Guest (null auth model)
+        // Check if there's a valid auth session in PocketBase authStore
+        if (pb.authStore.isValid) {
+          setUser(pb.authStore.model);
+          // If the logged-in user model is an Admin/has specific flags, set admin status
+          if (pb.authStore.model && (pb.authStore.model.isAdmin || pb.authStore.model.role === 'admin')) {
+            setIsAdmin(true);
+          }
+        } else {
+          // No valid session, treat as Guest
           setUser(null);
+          setIsAdmin(false);
         }
       } catch (err) {
         console.error("Authentication Error:", err);
+        setUser(null);
+        setIsAdmin(false);
       } finally {
         setAuthLoading(false);
       }
@@ -149,12 +155,12 @@ export default function App() {
 
   // 8. RELATIVE POSITIONING LOGIC
   const getRelativeX = (node) => {
-    if (!node || node.time === undefined) return -9999;
-    const val = Math.abs(parseFloat(node.time)) || 0;
+    if (!node || node.actualYear === undefined) return -9999;
+    const val = Math.abs(node.actualYear) || 0;
     const era = node.era;
     const z = zoom || 1;
     const zoneScale = ZONES[currentZone].scale;
-    const absoluteYear = era === 'BC' ? -val : val;
+    const absoluteYear = node.actualYear;
 
     if (currentZone === 'Years' && era === 'AD' && val >= 2000) {
       return (val - 2000) * zoneScale * z + 500;
@@ -185,7 +191,10 @@ export default function App() {
   )).sort();
 
   const handleCreateNode = async () => {
-    if (!user) return; // Auth Guard
+    if (!user) {
+      alert("Please sign in to create nodes");
+      return;
+    }
 
     const numericYear = parseFloat(formData.time) || 0; 
     const actualYear = formData.era === 'BC' ? -Math.abs(numericYear) : Math.abs(numericYear);
@@ -257,7 +266,14 @@ export default function App() {
 
   // --- NEW: DOUBTS HANDLERS ---
   const handleCreateDoubt = async () => {
-    if (!user || !doubtForm.title.trim()) return;
+    if (!user) {
+      alert("Please sign in to submit doubts");
+      return;
+    }
+    if (!doubtForm.title.trim()) {
+      alert("Please enter a title for your doubt");
+      return;
+    }
 
     const newDoubt = {
       title: doubtForm.title.trim(),
@@ -276,11 +292,15 @@ export default function App() {
       setDoubtForm({ title: '', content: '', suggestedTime: '', suggestedEra: 'AD' });
     } catch (err) {
       console.error("Doubt Creation Error:", err);
+      alert("Failed to create doubt. Please try again.");
     }
   };
 
   const handleVote = async (doubtId, voteType) => {
-    if (!user) return;
+    if (!user) {
+      alert("Please sign in to vote");
+      return;
+    }
     const doubt = doubts.find(d => d.id === doubtId);
     if (!doubt) return;
 
@@ -301,12 +321,13 @@ export default function App() {
       });
     } catch (err) {
       console.error("Vote Error:", err);
+      alert("Failed to record vote. Please try again.");
     }
   };
 
   const getVerticalOffset = (node, currentNodes) => {
     const sameTimeNodes = currentNodes.filter(n => 
-      n.time === node.time && n.era === node.era && !n.endTime
+      n.actualYear === node.actualYear && n.era === node.era && !n.endTime
     ).sort((a, b) => (a.id || "").localeCompare(b.id || ""));
     const index = sameTimeNodes.findIndex(n => n.id === node.id);
     return index <= 0 ? 0 : (index % 2 === 0 ? (index * 90) : (index * -90));
@@ -330,7 +351,7 @@ export default function App() {
           <span 
             key={index} 
             onClick={() => {
-              const nodeTime = parseFloat(targetNode.time) || 0;
+              const nodeTime = Math.abs(targetNode.actualYear) || 0;
               if (getRelativeX(targetNode) === -9999) {
                 if (targetNode.era === 'MYA') setCurrentZone('MYA');
                 else if (targetNode.era === 'GYA') setCurrentZone('GYA');
@@ -451,7 +472,7 @@ export default function App() {
 
         <footer style={homeStyles.footer}>
           <button style={homeStyles.loginBtn} onClick={() => setView('user')}>
-             {user ? `PROFILE: ${(user.id || user.uid || '').substring(0, 8)}` : 'GUEST ACCESS'}
+             {user ? `PROFILE: ${(user.id || '').substring(0, 8)}` : 'GUEST ACCESS'}
           </button>
           <span style={{ opacity: 0.4, fontSize: '9px' }}>v1.0.8 — MAPPING THE INFINITE</span>
         </footer>
@@ -637,8 +658,8 @@ export default function App() {
               {doubts.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)).map(doubt => {
                 const yesVotes = doubt.votes?.yes?.length || 0;
                 const noVotes = doubt.votes?.no?.length || 0;
-                const hasVotedYes = doubt.votes?.yes?.includes(user?.uid);
-                const hasVotedNo = doubt.votes?.no?.includes(user?.uid);
+                const hasVotedYes = doubt.votes?.yes?.includes(user?.id);
+                const hasVotedNo = doubt.votes?.no?.includes(user?.id);
 
                 return (
                   <div key={doubt.id} style={{ background: '#0a0a0a', border: '1px solid #222', padding: '30px', borderRadius: '8px', position: 'relative' }}>
@@ -713,22 +734,27 @@ export default function App() {
             <div style={{ background: '#111', padding: '40px', borderRadius: '12px', border: '1px solid #222', textAlign: 'center', marginBottom: '40px' }}>
               <div style={{ fontSize: '40px', marginBottom: '20px' }}>👤</div>
               <h2 style={{ color: '#ffd700', fontFamily: 'serif', marginBottom: '5px' }}>CHRONICLE EXPLORER</h2>
-              <code style={{ color: '#666', fontSize: '11px' }}>ID: {user?.uid}</code>
+              <code style={{ color: '#666', fontSize: '11px' }}>ID: {user?.id}</code>
               
               <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '30px' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>{nodes.filter(n => n.userId === user?.uid).length}</div>
+                  <div style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>{nodes.filter(n => n.userId === user?.id).length}</div>
                   <div style={{ color: '#444', fontSize: '9px', letterSpacing: '1px' }}>NODES CREATED</div>
                 </div>
                 <div style={{ width: '1px', background: '#222' }} />
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>{doubts.filter(d => d.authorId === user?.uid).length}</div>
+                  <div style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>{doubts.filter(d => d.authorId === user?.id).length}</div>
                   <div style={{ color: '#444', fontSize: '9px', letterSpacing: '1px' }}>DOUBTS RAISED</div>
                 </div>
               </div>
               
               <button 
-                onClick={() => signOut(auth).then(() => setView('home'))}
+                onClick={() => {
+                  pb.authStore.clear();
+                  setUser(null);
+                  setIsAdmin(false);
+                  setView('home');
+                }}
                 style={{ background: 'none', border: '1px solid #ff4444', color: '#ff4444', padding: '8px 20px', borderRadius: '20px', fontSize: '10px', marginTop: '30px', cursor: 'pointer' }}
               >
                 DISCONNECT FROM ETERNITY
@@ -739,7 +765,7 @@ export default function App() {
             <h3 style={{ fontSize: '12px', color: '#444', letterSpacing: '2px', marginBottom: '20px' }}>MY RECENT CONTRIBUTIONS</h3>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {nodes.filter(n => n.userId === user?.uid).slice(0, 5).map(node => (
+              {nodes.filter(n => n.userId === user?.id).slice(0, 5).map(node => (
                 <div key={node.id} style={{ background: '#0a0a0a', border: '1px solid #222', padding: '15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <span style={{ color: '#ffd700', fontSize: '14px', fontWeight: 'bold' }}>{node.title}</span>
@@ -749,7 +775,7 @@ export default function App() {
                 </div>
               ))}
               
-              {nodes.filter(n => n.userId === user?.uid).length === 0 && (
+              {nodes.filter(n => n.userId === user?.id).length === 0 && (
                 <div style={{ color: '#333', textAlign: 'center', padding: '20px', fontSize: '12px' }}>No nodes created yet.</div>
               )}
             </div>
@@ -855,10 +881,10 @@ export default function App() {
       if (xPos === -9999) return null;
 
       // Era Logic: Point vs Span
-      const isEra = node.endTime && node.endTime !== '' && parseFloat(node.endTime) !== parseFloat(node.time);
+      const isEra = node.actualEndYear && node.actualEndYear !== null && node.actualEndYear !== node.actualYear;
       let eraWidth = 0;
       if (isEra) {
-        const xEnd = getRelativeX({ ...node, time: node.endTime });
+        const xEnd = getRelativeX({ ...node, actualYear: node.actualEndYear });
         eraWidth = Math.abs(xEnd - xPos);
       }
 
@@ -948,7 +974,7 @@ export default function App() {
               }}>
                 {node.title}
                 <div style={{ opacity: 0.7, fontSize: '8px', marginTop: '2px' }}>
-                  {Math.abs(parseFloat(node.time)).toLocaleString()} {node.era}
+                  {Math.abs(node.actualYear).toLocaleString()} {node.era}
                 </div>
               </div>
             </div>
@@ -1027,7 +1053,7 @@ export default function App() {
               letterSpacing: '1px'
             }}>
               <span style={{ fontWeight: 'bold' }}>
-                {selectedNode.time ? Math.abs(parseFloat(selectedNode.time)).toLocaleString() : '0'} {selectedNode.era}
+                {selectedNode.actualYear ? Math.abs(selectedNode.actualYear).toLocaleString() : '0'} {selectedNode.era}
               </span>
               <span style={{ opacity: 0.4 }}>|</span>
               <span style={{ opacity: 0.6 }}>{selectedNode.tags}</span>
@@ -1069,7 +1095,7 @@ export default function App() {
           </div>
 
           {/* Administrative Action Bar (Visible only if isAdmin or Owner) */}
-          {(isAdmin || user?.uid === selectedNode.userId) && (
+          {(isAdmin || user?.id === selectedNode.userId) && (
             <div style={{ padding: '30px 40px', borderTop: '1px solid #1a1a1a', display: 'flex', gap: '15px', background: '#0a0a0a' }}>
               <button 
                 onClick={() => {
