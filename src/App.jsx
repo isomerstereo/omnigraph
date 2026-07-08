@@ -57,7 +57,14 @@ export default function App() {
     suggestedTime: '',
     suggestedEra: 'AD'
   });
-  
+
+  const [authForm, setAuthForm] = useState({
+    email: '',
+    password: '',
+    name: '',
+    isSignUp: false
+  });
+
   const scrollRef = useRef(null); 
 
  // 5. POCKETBASE AUTHENTICATION LOGIC (RULE 3)
@@ -322,6 +329,60 @@ export default function App() {
     } catch (err) {
       console.error("Vote Error:", err);
       alert("Failed to record vote. Please try again.");
+    }
+  };
+
+  // --- AUTH HANDLERS ---
+  const handleSignUp = async () => {
+    if (!authForm.email || !authForm.password || !authForm.name) {
+      alert("Please fill in all fields");
+      return;
+    }
+    if (authForm.password.length < 8) {
+      alert("Password must be at least 8 characters");
+      return;
+    }
+
+    try {
+      const userData = {
+        email: authForm.email,
+        password: authForm.password,
+        passwordConfirm: authForm.password,
+        name: authForm.name
+      };
+      
+      await pb.collection('users').create(userData);
+      alert("Account created! Please sign in.");
+      setAuthForm({ ...authForm, isSignUp: false });
+    } catch (err) {
+      console.error("Sign Up Error:", err);
+      alert("Failed to create account. Email may already be in use.");
+    }
+  };
+
+  const handleSignIn = async () => {
+    if (!authForm.email || !authForm.password) {
+      alert("Please fill in email and password");
+      return;
+    }
+
+    try {
+      const authData = await pb.collection('users').authWithPassword(
+        authForm.email,
+        authForm.password
+      );
+      
+      // Check if admin
+      if (authData.record.isAdmin || authData.record.role === 'admin') {
+        setIsAdmin(true);
+      }
+      
+      setUser(authData.record);
+      setView('home');
+      setAuthForm({ email: '', password: '', name: '', isSignUp: false });
+    } catch (err) {
+      console.error("Sign In Error:", err);
+      alert("Invalid email or password");
     }
   };
 
@@ -717,7 +778,7 @@ export default function App() {
           </div>
         </div>
       )}
-{/* 4. USER PROFILE VIEW */}
+{/* 4. USER PROFILE / AUTH VIEW */}
       {view === 'user' && (
         <div style={{ 
           flex: 1, 
@@ -729,56 +790,111 @@ export default function App() {
           alignItems: 'center',
           zIndex: 4000 
         }}>
-          <div style={{ maxWidth: '700px', width: '100%' }}>
-            {/* Profile Header */}
-            <div style={{ background: '#111', padding: '40px', borderRadius: '12px', border: '1px solid #222', textAlign: 'center', marginBottom: '40px' }}>
-              <div style={{ fontSize: '40px', marginBottom: '20px' }}>👤</div>
-              <h2 style={{ color: '#ffd700', fontFamily: 'serif', marginBottom: '5px' }}>CHRONICLE EXPLORER</h2>
-              <code style={{ color: '#666', fontSize: '11px' }}>ID: {user?.id}</code>
-              
-              <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '30px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>{nodes.filter(n => n.userId === user?.id).length}</div>
-                  <div style={{ color: '#444', fontSize: '9px', letterSpacing: '1px' }}>NODES CREATED</div>
-                </div>
-                <div style={{ width: '1px', background: '#222' }} />
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>{doubts.filter(d => d.authorId === user?.id).length}</div>
-                  <div style={{ color: '#444', fontSize: '9px', letterSpacing: '1px' }}>DOUBTS RAISED</div>
-                </div>
-              </div>
-              
-              <button 
-                onClick={() => {
-                  pb.authStore.clear();
-                  setUser(null);
-                  setIsAdmin(false);
-                  setView('home');
-                }}
-                style={{ background: 'none', border: '1px solid #ff4444', color: '#ff4444', padding: '8px 20px', borderRadius: '20px', fontSize: '10px', marginTop: '30px', cursor: 'pointer' }}
-              >
-                DISCONNECT FROM ETERNITY
-              </button>
-            </div>
+          <div style={{ maxWidth: '500px', width: '100%' }}>
+            {!user ? (
+              /* AUTH FORM */
+              <div style={{ background: '#111', padding: '40px', borderRadius: '12px', border: '1px solid #222', textAlign: 'center' }}>
+                <div style={{ fontSize: '40px', marginBottom: '20px' }}>🔐</div>
+                <h2 style={{ color: '#ffd700', fontFamily: 'serif', marginBottom: '5px' }}>
+                  {authForm.isSignUp ? 'JOIN THE CHRONICLE' : 'ENTER THE CHRONICLE'}
+                </h2>
+                <p style={{ color: '#666', fontSize: '12px', marginBottom: '30px' }}>
+                  {authForm.isSignUp ? 'Create your account to contribute to history' : 'Sign in to access your chronicle'}
+                </p>
 
-            {/* My Contributions Tabs */}
-            <h3 style={{ fontSize: '12px', color: '#444', letterSpacing: '2px', marginBottom: '20px' }}>MY RECENT CONTRIBUTIONS</h3>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {nodes.filter(n => n.userId === user?.id).slice(0, 5).map(node => (
-                <div key={node.id} style={{ background: '#0a0a0a', border: '1px solid #222', padding: '15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ color: '#ffd700', fontSize: '14px', fontWeight: 'bold' }}>{node.title}</span>
-                    <div style={{ color: '#444', fontSize: '10px' }}>{node.time} {node.era}</div>
+                {authForm.isSignUp && (
+                  <input 
+                    type="text" 
+                    placeholder="Your Name" 
+                    value={authForm.name}
+                    onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                    style={inputStyle} 
+                  />
+                )}
+
+                <input 
+                  type="email" 
+                  placeholder="Email Address" 
+                  value={authForm.email}
+                  onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+                  style={inputStyle} 
+                />
+
+                <input 
+                  type="password" 
+                  placeholder="Password (min 8 characters)" 
+                  value={authForm.password}
+                  onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+                  style={inputStyle} 
+                />
+
+                <button 
+                  onClick={authForm.isSignUp ? handleSignUp : handleSignIn}
+                  style={saveBtnStyle}
+                >
+                  {authForm.isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
+                </button>
+
+                <button 
+                  onClick={() => setAuthForm({...authForm, isSignUp: !authForm.isSignUp})}
+                  style={{ width: '100%', background: 'none', border: 'none', color: '#666', marginTop: '20px', cursor: 'pointer', fontSize: '11px', letterSpacing: '1px' }}
+                >
+                  {authForm.isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                </button>
+              </div>
+            ) : (
+              /* PROFILE VIEW */
+              <>
+                <div style={{ background: '#111', padding: '40px', borderRadius: '12px', border: '1px solid #222', textAlign: 'center', marginBottom: '40px' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '20px' }}>👤</div>
+                  <h2 style={{ color: '#ffd700', fontFamily: 'serif', marginBottom: '5px' }}>CHRONICLE EXPLORER</h2>
+                  <code style={{ color: '#666', fontSize: '11px' }}>ID: {user?.id}</code>
+                  
+                  <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '30px' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>{nodes.filter(n => n.userId === user?.id).length}</div>
+                      <div style={{ color: '#444', fontSize: '9px', letterSpacing: '1px' }}>NODES CREATED</div>
+                    </div>
+                    <div style={{ width: '1px', background: '#222' }} />
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>{doubts.filter(d => d.authorId === user?.id).length}</div>
+                      <div style={{ color: '#444', fontSize: '9px', letterSpacing: '1px' }}>DOUBTS RAISED</div>
+                    </div>
                   </div>
-                  <button onClick={() => { setSelectedNode(node); setView('graph'); }} style={{ background: 'none', border: 'none', color: '#ffd700', fontSize: '10px', cursor: 'pointer' }}>VIEW ON MAP →</button>
+                  
+                  <button 
+                    onClick={() => {
+                      pb.authStore.clear();
+                      setUser(null);
+                      setIsAdmin(false);
+                      setView('home');
+                    }}
+                    style={{ background: 'none', border: '1px solid #ff4444', color: '#ff4444', padding: '8px 20px', borderRadius: '20px', fontSize: '10px', marginTop: '30px', cursor: 'pointer' }}
+                  >
+                    DISCONNECT FROM ETERNITY
+                  </button>
                 </div>
-              ))}
-              
-              {nodes.filter(n => n.userId === user?.id).length === 0 && (
-                <div style={{ color: '#333', textAlign: 'center', padding: '20px', fontSize: '12px' }}>No nodes created yet.</div>
-              )}
-            </div>
+
+                {/* My Contributions Tabs */}
+                <h3 style={{ fontSize: '12px', color: '#444', letterSpacing: '2px', marginBottom: '20px' }}>MY RECENT CONTRIBUTIONS</h3>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  {nodes.filter(n => n.userId === user?.id).slice(0, 5).map(node => (
+                    <div key={node.id} style={{ background: '#0a0a0a', border: '1px solid #222', padding: '15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span style={{ color: '#ffd700', fontSize: '14px', fontWeight: 'bold' }}>{node.title}</span>
+                        <div style={{ color: '#444', fontSize: '10px' }}>{Math.abs(node.actualYear).toLocaleString()} {node.era}</div>
+                      </div>
+                      <button onClick={() => { setSelectedNode(node); setView('graph'); }} style={{ background: 'none', border: 'none', color: '#ffd700', fontSize: '10px', cursor: 'pointer' }}>VIEW ON MAP →</button>
+                    </div>
+                  ))}
+                  
+                  {nodes.filter(n => n.userId === user?.id).length === 0 && (
+                    <div style={{ color: '#333', textAlign: 'center', padding: '20px', fontSize: '12px' }}>No nodes created yet.</div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
