@@ -49,10 +49,49 @@ Go to Settings > Collections > New Collection
 6. **authorName** (text, optional)
 7. **votes** (json, optional)
 8. **status** (select, optional) - Values: `pending`, `approved`, `rejected`
+9. **relatedNodeId** (text, optional) - ID of related node (for doubts on existing nodes)
+10. **doubtType** (select, optional) - Values: `validity`, `resource`, `connection`
 
-### 4. API Rules (Optional)
-For development, you can leave API rules as null (public access).
-For production, set appropriate rules based on your security requirements.
+### 4. Create "discussions" Collection (NEW - for forum feature)
+Go to Settings > Collections > New Collection
+
+**Collection Name:** `discussions`
+**Type:** Base
+
+**Fields to add:**
+1. **title** (text, required)
+2. **content** (text, required)
+3. **authorId** (relation, optional) - Link to users collection
+4. **authorName** (text, optional)
+5. **category** (select, optional) - Values: `node_proposal`, `general`, `historical_debate`, `source_review`
+6. **tags** (text, optional)
+7. **votes** (json, optional) - Structure: `{up: [], down: []}`
+8. **status** (select, optional) - Values: `active`, `resolved`, `archived`
+9. **relatedNodeId** (text, optional) - ID of related node (if applicable)
+
+### 5. Create "comments" Collection (NEW - for forum feature)
+Go to Settings > Collections > New Collection
+
+**Collection Name:** `comments`
+**Type:** Base
+
+**Fields to add:**
+1. **discussionId** (relation, required) - Link to discussions collection
+2. **parentId** (text, optional) - ID of parent comment (for threading)
+3. **content** (text, required)
+4. **authorId** (relation, optional) - Link to users collection
+5. **authorName** (text, optional)
+6. **votes** (json, optional) - Structure: `{up: [], down: []}`
+
+### 6. API Rules (For Development)
+Set these rules to allow authenticated users:
+
+**For all collections (nodes, doubts, discussions, comments):**
+- **List rule**: `@request.auth.id != ""`
+- **View rule**: `@request.auth.id != ""`
+- **Create rule**: `@request.auth.id != ""`
+- **Update rule**: `@request.auth.id == @request.data.userId || @request.auth.id == ""`
+- **Delete rule**: `@request.auth.id == @request.data.userId || @request.auth.id == ""`
 
 ## After Setup
 Once collections are created, the app should work immediately with the existing PocketBase integration in App.jsx.

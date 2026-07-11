@@ -27,14 +27,17 @@ export default function App() {
 
   // 3. GRAPH & DATA STATE
   const [showModal, setShowModal] = useState(false); 
-  const [nodes, setNodes] = useState([]); 
+  const [nodes, setNodes] = useState([]);
   const [doubts, setDoubts] = useState([]);
-  const [selectedNode, setSelectedNode] = useState(null); 
+  const [discussions, setDiscussions] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
   const [focusedNode, setFocusedNode] = useState(null);
-  const [zoom, setZoom] = useState(1); 
-  const [searchFilter, setSearchFilter] = useState(''); 
-  const [showSuggestions, setShowSuggestions] = useState(false); 
-  const [isEditing, setIsEditing] = useState(false); 
+  const [zoom, setZoom] = useState(1);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [doubtsTab, setDoubtsTab] = useState('proposals'); // 'proposals', 'discussions', 'node_doubts' 
 
   // 4. FORM STATE
   const [formData, setFormData] = useState({
@@ -57,6 +60,14 @@ export default function App() {
     suggestedTime: '',
     suggestedEra: 'AD'
   });
+
+  const [nodeDoubtForm, setNodeDoubtForm] = useState({
+    content: '',
+    doubtType: 'validity',
+    relatedNodeId: null
+  });
+
+  const [showNodeDoubtModal, setShowNodeDoubtModal] = useState(false);
 
   const [authForm, setAuthForm] = useState({
     email: '',
@@ -110,16 +121,38 @@ export default function App() {
 
   // 6. POCKETBASE REAL-TIME SUBSCRIPTION SYNC (RULE 1 & 2)
   useEffect(() => {
-    // 1. Fetch initial records list for 'nodes' and 'doubts'
+    // 1. Fetch initial records list for 'nodes', 'doubts', 'discussions', 'comments'
     const fetchInitialData = async () => {
       try {
         const initialNodes = await pb.collection('nodes').getFullList({ sort: '-created' });
+        console.log("Loaded nodes:", initialNodes.length);
+        initialNodes.forEach(node => {
+          console.log(`Node: ${node.title}, Era: ${node.era}, actualYear: ${node.actualYear}`);
+        });
         setNodes(initialNodes);
+      } catch (err) {
+        console.error("Nodes fetch error:", err);
+      }
 
+      try {
         const initialDoubts = await pb.collection('doubts').getFullList({ sort: '-created' });
         setDoubts(initialDoubts);
       } catch (err) {
-        console.error("Initial data load error:", err);
+        console.error("Doubts fetch error:", err);
+      }
+
+      try {
+        const initialDiscussions = await pb.collection('discussions').getFullList({ sort: '-created' });
+        setDiscussions(initialDiscussions);
+      } catch (err) {
+        console.log("Discussions collection not found (will be created when needed)");
+      }
+
+      try {
+        const initialComments = await pb.collection('comments').getFullList({ sort: '-created' });
+        setComments(initialComments);
+      } catch (err) {
+        console.log("Comments collection not found (will be created when needed)");
       }
     };
 
@@ -147,10 +180,42 @@ export default function App() {
       }
     }).catch(err => console.error("Doubts subscription failed:", err));
 
+    // 4. Subscribe to real-time changes for 'discussions'
+    try {
+      pb.collection('discussions').subscribe('*', (e) => {
+        if (e.action === 'create') {
+          setDiscussions((prev) => [e.record, ...prev]);
+        } else if (e.action === 'update') {
+          setDiscussions((prev) => prev.map((item) => (item.id === e.record.id ? e.record : item)));
+        } else if (e.action === 'delete') {
+          setDiscussions((prev) => prev.filter((item) => item.id !== e.record.id));
+        }
+      }).catch(err => console.log("Discussions subscription failed (collection may not exist)"));
+    } catch (err) {
+      console.log("Discussions collection not found (will be created when needed)");
+    }
+
+    // 5. Subscribe to real-time changes for 'comments'
+    try {
+      pb.collection('comments').subscribe('*', (e) => {
+        if (e.action === 'create') {
+          setComments((prev) => [e.record, ...prev]);
+        } else if (e.action === 'update') {
+          setComments((prev) => prev.map((item) => (item.id === e.record.id ? e.record : item)));
+        } else if (e.action === 'delete') {
+          setComments((prev) => prev.filter((item) => item.id !== e.record.id));
+        }
+      }).catch(err => console.log("Comments subscription failed (collection may not exist)"));
+    } catch (err) {
+      console.log("Comments collection not found (will be created when needed)");
+    }
+
     // Clean up all subscriptions when component unmounts
     return () => {
       pb.collection('nodes').unsubscribe('*');
       pb.collection('doubts').unsubscribe('*');
+      pb.collection('discussions').unsubscribe('*');
+      pb.collection('comments').unsubscribe('*');
     };
   }, []); // Runs once on mount to establish permanent subscriptions
   // 7. AUTO-CENTER LOGIC
@@ -163,11 +228,20 @@ export default function App() {
   // 8. RELATIVE POSITIONING LOGIC
   const getRelativeX = (node) => {
     if (!node || node.actualYear === undefined) return -9999;
-    const val = Math.abs(node.actualYear) || 0;
     const era = node.era;
     const z = zoom || 1;
     const zoneScale = ZONES[currentZone].scale;
     const absoluteYear = node.actualYear;
+
+    // Convert actualYear to appropriate value for zone calculation
+    let val;
+    if (era === 'MYA') {
+      val = Math.abs(absoluteYear) / 1000000; // Convert back to MYA units
+    } else if (era === 'GYA') {
+      val = Math.abs(absoluteYear) / 1000000000; // Convert back to GYA units
+    } else {
+      val = Math.abs(absoluteYear);
+    }
 
     if (currentZone === 'Years' && era === 'AD' && val >= 2000) {
       return (val - 2000) * zoneScale * z + 500;
@@ -203,14 +277,33 @@ export default function App() {
       return;
     }
 
-    const numericYear = parseFloat(formData.time) || 0; 
-    const actualYear = formData.era === 'BC' ? -Math.abs(numericYear) : Math.abs(numericYear);
+    const numericYear = parseFloat(formData.time) || 0;
+    
+    // Calculate actualYear based on era
+    let actualYear;
+    if (formData.era === 'BC') {
+      actualYear = -Math.abs(numericYear);
+    } else if (formData.era === 'MYA') {
+      actualYear = -(numericYear * 1000000); // Convert to negative years
+    } else if (formData.era === 'GYA') {
+      actualYear = -(numericYear * 1000000000); // Convert to negative years
+    } else {
+      actualYear = Math.abs(numericYear); // AD
+    }
     
     // Logic for Era End Year
     let actualEndYear = null;
     if (formData.nodeType === 'era' && formData.endTime) {
       const numericEnd = parseFloat(formData.endTime) || 0;
-      actualEndYear = formData.era === 'BC' ? -Math.abs(numericEnd) : Math.abs(numericEnd);
+      if (formData.era === 'BC') {
+        actualEndYear = -Math.abs(numericEnd);
+      } else if (formData.era === 'MYA') {
+        actualEndYear = -(numericEnd * 1000000);
+      } else if (formData.era === 'GYA') {
+        actualEndYear = -(numericEnd * 1000000000);
+      } else {
+        actualEndYear = Math.abs(numericEnd);
+      }
     }
 
     const formattedTags = formData.tags.split(' ')
@@ -254,6 +347,7 @@ export default function App() {
       });
     } catch (err) {
       console.error("PocketBase Save Error:", err);
+      alert("Failed to save node: " + (err.message || "Unknown error"));
     }
   };
 
@@ -299,7 +393,42 @@ export default function App() {
       setDoubtForm({ title: '', content: '', suggestedTime: '', suggestedEra: 'AD' });
     } catch (err) {
       console.error("Doubt Creation Error:", err);
-      alert("Failed to create doubt. Please try again.");
+      alert("Failed to create doubt: " + (err.message || "Unknown error"));
+    }
+  };
+
+  const handleNodeDoubt = async () => {
+    if (!user) {
+      alert("Please sign in to raise doubts");
+      return;
+    }
+    if (!nodeDoubtForm.content.trim()) {
+      alert("Please enter your doubt or comment");
+      return;
+    }
+
+    const relatedNode = nodes.find(n => n.id === nodeDoubtForm.relatedNodeId);
+    if (!relatedNode) return;
+
+    const newDoubt = {
+      title: `Doubt: ${relatedNode.title}`,
+      content: nodeDoubtForm.content,
+      doubtType: nodeDoubtForm.doubtType,
+      relatedNodeId: nodeDoubtForm.relatedNodeId,
+      authorId: user.id,
+      authorName: user.name || user.username || `Explorer_${user.id.substring(0, 5)}`,
+      votes: { yes: [], no: [] },
+      status: 'pending'
+    };
+
+    try {
+      await pb.collection('doubts').create(newDoubt);
+      setNodeDoubtForm({ content: '', doubtType: 'validity', relatedNodeId: null });
+      setShowNodeDoubtModal(false);
+      alert("Doubt raised successfully!");
+    } catch (err) {
+      console.error("Node Doubt Creation Error:", err);
+      alert("Failed to raise doubt: " + (err.message || "Unknown error"));
     }
   };
 
@@ -666,6 +795,64 @@ export default function App() {
               The collective consensus of explorers shapes the master graph.
             </p>
 
+            {/* Tab Navigation */}
+            <div style={{ display: 'flex', background: '#111', borderRadius: '12px', padding: '6px', marginBottom: '40px', border: '1px solid #222' }}>
+              <button
+                onClick={() => setDoubtsTab('proposals')}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  background: doubtsTab === 'proposals' ? '#ffd700' : 'transparent',
+                  color: doubtsTab === 'proposals' ? 'black' : '#666',
+                  transition: '0.3s'
+                }}
+              >
+                PROPOSALS
+              </button>
+              <button
+                onClick={() => setDoubtsTab('discussions')}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  background: doubtsTab === 'discussions' ? '#ffd700' : 'transparent',
+                  color: doubtsTab === 'discussions' ? 'black' : '#666',
+                  transition: '0.3s'
+                }}
+              >
+                DISCUSSIONS
+              </button>
+              <button
+                onClick={() => setDoubtsTab('node_doubts')}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  background: doubtsTab === 'node_doubts' ? '#ffd700' : 'transparent',
+                  color: doubtsTab === 'node_doubts' ? 'black' : '#666',
+                  transition: '0.3s'
+                }}
+              >
+                NODE DOUBTS
+              </button>
+            </div>
+
+            {/* Proposals Tab Content */}
+            {doubtsTab === 'proposals' && (
+              <>
             {/* Submission Form */}
             <div style={{ background: '#111', padding: '35px', borderRadius: '12px', border: '1px solid #222', marginBottom: '60px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
               <h3 style={{ marginTop: 0, fontSize: '12px', color: '#ffd700', letterSpacing: '3px', marginBottom: '25px' }}>NEW PROPOSAL</h3>
@@ -716,7 +903,7 @@ export default function App() {
 
             {/* Proposals List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-              {doubts.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)).map(doubt => {
+              {doubts.filter(d => !d.relatedNodeId).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)).map(doubt => {
                 const yesVotes = doubt.votes?.yes?.length || 0;
                 const noVotes = doubt.votes?.no?.length || 0;
                 const hasVotedYes = doubt.votes?.yes?.includes(user?.id);
@@ -730,7 +917,7 @@ export default function App() {
                         BY: {doubt.authorName}
                       </span>
                     </div>
-                    
+
                     <div style={{ color: '#aaa', fontSize: '11px', marginBottom: '15px', fontWeight: 'bold', letterSpacing: '1px' }}>
                       SUGGESTED: {doubt.suggestedTime} {doubt.suggestedEra}
                     </div>
@@ -740,24 +927,24 @@ export default function App() {
                     </p>
 
                     <div style={{ display: 'flex', gap: '15px', borderTop: '1px solid #1a1a1a', paddingTop: '20px' }}>
-                      <button 
+                      <button
                         onClick={() => handleVote(doubt.id, 'yes')}
-                        style={{ 
-                          background: hasVotedYes ? 'rgba(0, 255, 0, 0.1)' : '#111', 
-                          border: `1px solid ${hasVotedYes ? '#00ff00' : '#333'}`, 
-                          color: hasVotedYes ? '#00ff00' : '#666', 
+                        style={{
+                          background: hasVotedYes ? 'rgba(0, 255, 0, 0.1)' : '#111',
+                          border: `1px solid ${hasVotedYes ? '#00ff00' : '#333'}`,
+                          color: hasVotedYes ? '#00ff00' : '#666',
                           padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
                           flex: 1, transition: '0.2s'
                         }}
                       >
                         VERIFY ({yesVotes})
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleVote(doubt.id, 'no')}
-                        style={{ 
-                          background: hasVotedNo ? 'rgba(255, 0, 0, 0.1)' : '#111', 
-                          border: `1px solid ${hasVotedNo ? '#ff4444' : '#333'}`, 
-                          color: hasVotedNo ? '#ff4444' : '#666', 
+                        style={{
+                          background: hasVotedNo ? 'rgba(255, 0, 0, 0.1)' : '#111',
+                          border: `1px solid ${hasVotedNo ? '#ff4444' : '#333'}`,
+                          color: hasVotedNo ? '#ff4444' : '#666',
                           padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
                           flex: 1, transition: '0.2s'
                         }}
@@ -768,16 +955,93 @@ export default function App() {
                   </div>
                 );
               })}
-              
-              {doubts.length === 0 && (
+
+              {doubts.filter(d => !d.relatedNodeId).length === 0 && (
                 <div style={{ textAlign: 'center', color: '#444', padding: '60px', border: '2px dashed #1a1a1a', borderRadius: '12px' }}>
-                  The archive is currently silent. No Doubts have been raised yet.
+                  The archive is currently silent. No proposals have been raised yet.
                 </div>
               )}
             </div>
+            </>
+            )}
+
+            {/* Discussions Tab Content */}
+            {doubtsTab === 'discussions' && (
+              <div style={{ textAlign: 'center', color: '#444', padding: '60px', border: '2px dashed #1a1a1a', borderRadius: '12px' }}>
+                Discussions feature coming soon. Create the discussions and comments collections in PocketBase to enable this feature.
+              </div>
+            )}
+
+            {/* Node Doubts Tab Content */}
+            {doubtsTab === 'node_doubts' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
+                {doubts.filter(d => d.relatedNodeId).length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#444', padding: '60px', border: '2px dashed #1a1a1a', borderRadius: '12px' }}>
+                    No doubts raised on existing nodes yet. Click on any node to raise doubts.
+                  </div>
+                ) : (
+                  doubts.filter(d => d.relatedNodeId).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)).map(doubt => {
+                    const relatedNode = nodes.find(n => n.id === doubt.relatedNodeId);
+                    const yesVotes = doubt.votes?.yes?.length || 0;
+                    const noVotes = doubt.votes?.no?.length || 0;
+                    const hasVotedYes = doubt.votes?.yes?.includes(user?.id);
+                    const hasVotedNo = doubt.votes?.no?.includes(user?.id);
+
+                    return (
+                      <div key={doubt.id} style={{ background: '#0a0a0a', border: '1px solid #222', padding: '30px', borderRadius: '8px', position: 'relative' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'flex-start' }}>
+                          <span style={{ color: '#ffd700', fontWeight: 'bold', fontSize: '20px', fontFamily: 'serif' }}>{doubt.title}</span>
+                          <span style={{ color: '#444', fontSize: '10px', background: '#111', padding: '4px 8px', borderRadius: '4px' }}>
+                            BY: {doubt.authorName}
+                          </span>
+                        </div>
+
+                        {relatedNode && (
+                          <div style={{ color: '#666', fontSize: '11px', marginBottom: '15px', fontWeight: 'bold', letterSpacing: '1px' }}>
+                            RELATED TO: <span style={{ color: '#ffd700', cursor: 'pointer' }} onClick={() => { setSelectedNode(relatedNode); setView('graph'); }}>{relatedNode.title}</span>
+                          </div>
+                        )}
+
+                        <p style={{ color: '#888', fontSize: '14px', lineHeight: '1.7', margin: '0 0 25px 0', whiteSpace: 'pre-wrap' }}>
+                          {doubt.content}
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '15px', borderTop: '1px solid #1a1a1a', paddingTop: '20px' }}>
+                          <button
+                            onClick={() => handleVote(doubt.id, 'yes')}
+                            style={{
+                              background: hasVotedYes ? 'rgba(0, 255, 0, 0.1)' : '#111',
+                              border: `1px solid ${hasVotedYes ? '#00ff00' : '#333'}`,
+                              color: hasVotedYes ? '#00ff00' : '#666',
+                              padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
+                              flex: 1, transition: '0.2s'
+                            }}
+                          >
+                            VERIFY ({yesVotes})
+                          </button>
+                          <button
+                            onClick={() => handleVote(doubt.id, 'no')}
+                            style={{
+                              background: hasVotedNo ? 'rgba(255, 0, 0, 0.1)' : '#111',
+                              border: `1px solid ${hasVotedNo ? '#ff4444' : '#333'}`,
+                              color: hasVotedNo ? '#ff4444' : '#666',
+                              padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
+                              flex: 1, transition: '0.2s'
+                            }}
+                          >
+                            DISPUTE ({noVotes})
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
+
 {/* 4. USER PROFILE / AUTH VIEW */}
       {view === 'user' && (
         <div style={{ 
@@ -847,7 +1111,7 @@ export default function App() {
               <>
                 <div style={{ background: '#111', padding: '40px', borderRadius: '12px', border: '1px solid #222', textAlign: 'center', marginBottom: '40px' }}>
                   <div style={{ fontSize: '40px', marginBottom: '20px' }}>👤</div>
-                  <h2 style={{ color: '#ffd700', fontFamily: 'serif', marginBottom: '5px' }}>CHRONICLE EXPLORER</h2>
+                  <h2 style={{ color: '#ffd700', fontFamily: 'serif', marginBottom: '5px' }}>{user?.name || user?.username || 'CHRONICLE EXPLORER'}</h2>
                   <code style={{ color: '#666', fontSize: '11px' }}>ID: {user?.id}</code>
                   
                   <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '30px' }}>
@@ -1203,11 +1467,98 @@ export default function App() {
             
             {/* Citation Box */}
             {selectedNode.citation && (
-              <div style={{ padding: '20px', background: '#111', borderRadius: '4px', borderLeft: '3px solid #ffd700' }}>
+              <div style={{ padding: '20px', background: '#111', borderRadius: '4px', borderLeft: '3px solid #ffd700', marginBottom: '30px' }}>
                 <h4 style={{ fontSize: '10px', color: '#ffd700', margin: '0 0 8px 0', letterSpacing: '2px' }}>SOURCE & VERIFICATION</h4>
                 <p style={{ margin: 0, fontStyle: 'italic', color: '#888', fontSize: '12px', lineHeight: '1.5' }}>{selectedNode.citation}</p>
               </div>
             )}
+
+            {/* Node Doubts/Comments Section */}
+            <div style={{ marginTop: '40px' }}>
+              <h4 style={{ fontSize: '10px', color: '#ffd700', margin: '0 0 20px 0', letterSpacing: '2px' }}>DOUBTS & DISCUSSIONS</h4>
+              
+              {doubts.filter(d => d.relatedNodeId === selectedNode.id).length === 0 ? (
+                <div style={{ color: '#444', fontSize: '12px', fontStyle: 'italic', padding: '20px', background: '#0a0a0a', borderRadius: '4px' }}>
+                  No doubts raised for this node yet.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  {doubts
+                    .filter(d => d.relatedNodeId === selectedNode.id)
+                    .sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0))
+                    .map(doubt => {
+                      const doubtTypeColors = {
+                        validity: '#ff6b6b',
+                        resource: '#4ecdc4',
+                        connection: '#a8e6cf'
+                      };
+                      const doubtTypeLabels = {
+                        validity: 'VALIDITY CHALLENGE',
+                        resource: 'ADDITIONAL RESOURCE',
+                        connection: 'CAUSAL CONNECTION'
+                      };
+
+                      return (
+                        <div key={doubt.id} style={{ background: '#0a0a0a', border: '1px solid #222', padding: '20px', borderRadius: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center' }}>
+                            <span style={{ 
+                              fontSize: '9px', 
+                              color: doubtTypeColors[doubt.doubtType] || '#ffd700', 
+                              letterSpacing: '1px', 
+                              fontWeight: 'bold',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              background: 'rgba(255,255,255,0.05)'
+                            }}>
+                              {doubtTypeLabels[doubt.doubtType] || 'DOUBT'}
+                            </span>
+                            <span style={{ fontSize: '10px', color: '#666' }}>
+                              {doubt.authorName || 'Anonymous'}
+                            </span>
+                          </div>
+                          <p style={{ margin: 0, color: '#bbb', fontSize: '13px', lineHeight: '1.6' }}>
+                            {doubt.content}
+                          </p>
+                          <div style={{ marginTop: '15px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                onClick={() => handleVote(doubt.id, 'yes')}
+                                style={{
+                                  background: doubt.votes?.yes?.includes(user?.id) ? 'rgba(78, 205, 196, 0.2)' : '#111',
+                                  border: `1px solid ${doubt.votes?.yes?.includes(user?.id) ? '#4ecdc4' : '#333'}`,
+                                  color: doubt.votes?.yes?.includes(user?.id) ? '#4ecdc4' : '#666',
+                                  padding: '6px 12px',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '10px',
+                                  fontWeight: 'bold'
+                                }}
+                              >
+                                ✓ {doubt.votes?.yes?.length || 0}
+                              </button>
+                              <button
+                                onClick={() => handleVote(doubt.id, 'no')}
+                                style={{
+                                  background: doubt.votes?.no?.includes(user?.id) ? 'rgba(255, 107, 107, 0.2)' : '#111',
+                                  border: `1px solid ${doubt.votes?.no?.includes(user?.id) ? '#ff6b6b' : '#333'}`,
+                                  color: doubt.votes?.no?.includes(user?.id) ? '#ff6b6b' : '#666',
+                                  padding: '6px 12px',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '10px',
+                                  fontWeight: 'bold'
+                                }}
+                              >
+                                ✗ {doubt.votes?.no?.length || 0}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Administrative Action Bar (Visible only if isAdmin or Owner) */}
@@ -1223,6 +1574,15 @@ export default function App() {
                 style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid #333', color: 'white', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
               >
                 EDIT RECORD
+              </button>
+              <button
+                onClick={() => {
+                  setNodeDoubtForm({ ...nodeDoubtForm, relatedNodeId: selectedNode.id });
+                  setShowNodeDoubtModal(true);
+                }}
+                style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid #ffd700', color: '#ffd700', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+              >
+                RAISE DOUBT
               </button>
               <button 
                 onClick={() => handleDelete(selectedNode.id)} 
@@ -1425,8 +1785,89 @@ export default function App() {
             >
               CANCEL AND EXIT
             </button>
-          </div> 
-        </div> 
+          </div>
+        </div>
+      )}
+
+      {/* 7. NODE DOUBT MODAL */}
+      {showNodeDoubtModal && (
+        <div
+          onClick={() => setShowNodeDoubtModal(false)}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(10px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 7000 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: '#111', padding: '40px', borderRadius: '16px', width: '480px', border: '1px solid #333', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}
+          >
+            <h2 style={{ marginTop: 0, fontFamily: 'serif', color: 'white', fontSize: '28px', marginBottom: '10px' }}>
+              RAISE DOUBT
+            </h2>
+
+            <div style={{ marginBottom: '25px', fontSize: '12px', color: '#666', lineHeight: '1.5' }}>
+              Challenge the validity, provide additional resources, or suggest causal connections for this node.
+            </div>
+
+            {/* Doubt Type Selection */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ marginBottom: '10px', fontSize: '11px', color: '#ffd700', letterSpacing: '2px' }}>DOUBT TYPE</div>
+              <div style={{ display: 'flex', background: '#000', borderRadius: '8px', padding: '4px', border: '1px solid #222' }}>
+                <button
+                  onClick={() => setNodeDoubtForm({...nodeDoubtForm, doubtType: 'validity'})}
+                  style={{
+                    flex: 1, padding: '12px', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer',
+                    background: nodeDoubtForm.doubtType === 'validity' ? '#ffd700' : 'transparent',
+                    color: nodeDoubtForm.doubtType === 'validity' ? 'black' : '#666',
+                    transition: '0.3s'
+                  }}
+                >VALIDITY</button>
+                <button
+                  onClick={() => setNodeDoubtForm({...nodeDoubtForm, doubtType: 'resource'})}
+                  style={{
+                    flex: 1, padding: '12px', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer',
+                    background: nodeDoubtForm.doubtType === 'resource' ? '#ffd700' : 'transparent',
+                    color: nodeDoubtForm.doubtType === 'resource' ? 'black' : '#666',
+                    transition: '0.3s'
+                  }}
+                >RESOURCE</button>
+                <button
+                  onClick={() => setNodeDoubtForm({...nodeDoubtForm, doubtType: 'connection'})}
+                  style={{
+                    flex: 1, padding: '12px', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer',
+                    background: nodeDoubtForm.doubtType === 'connection' ? '#ffd700' : 'transparent',
+                    color: nodeDoubtForm.doubtType === 'connection' ? 'black' : '#666',
+                    transition: '0.3s'
+                  }}
+                >CONNECTION</button>
+              </div>
+            </div>
+
+            <textarea
+              placeholder={
+                nodeDoubtForm.doubtType === 'validity' ? "Question the accuracy or date of this event..." :
+                nodeDoubtForm.doubtType === 'resource' ? "Provide additional sources or better references..." :
+                "Suggest causal connections or related events..."
+              }
+              value={nodeDoubtForm.content}
+              onChange={(e) => setNodeDoubtForm({...nodeDoubtForm, content: e.target.value})}
+              style={{ ...inputStyle, height: '150px', resize: 'none', lineHeight: '1.6' }}
+            />
+
+            <button
+              onClick={handleNodeDoubt}
+              style={{ ...saveBtnStyle, opacity: nodeDoubtForm.content.trim() ? 1 : 0.5, cursor: nodeDoubtForm.content.trim() ? 'pointer' : 'not-allowed' }}
+              disabled={!nodeDoubtForm.content.trim()}
+            >
+              SUBMIT DOUBT
+            </button>
+
+            <button
+              onClick={() => setShowNodeDoubtModal(false)}
+              style={{ width: '100%', background: 'none', border: 'none', color: '#444', marginTop: '20px', cursor: 'pointer', fontSize: '11px', letterSpacing: '1px' }}
+            >
+              CANCEL
+            </button>
+          </div>
+        </div>
       )}
 
 {/* 7. DYNAMIC CSS STYLES */}
